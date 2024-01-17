@@ -1,0 +1,58 @@
+{{ define "index.tmpl" }}
+<!DOCTYPE html>
+<html>
+<head>
+  <title> {{.title}} </title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+    }
+
+    #search-form {
+      margin-top: 20px;
+    }
+
+    #search-input {
+      width: 400px;
+      height: 30px;
+      padding: 5px;
+      font-size: 16px;
+    }
+
+    #search-button {
+      height: 40px;
+      font-size: 16px;
+      margin-left: 10px;
+    }
+
+    #search-results {
+      margin-top: 20px;
+    }
+
+    .result {
+      margin-bottom: 10px;
+    }
+
+    .result-title {
+      font-weight: bold;
+    }
+
+    .result-url {
+      color: #006621;
+    }
+
+    .result-description {
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div id="search-form">
+    <form action="/search" method="get">
+      <input type="text" id="search" name="q" placeholder="search...">
+      <button type="submit" id="search-button">search</button>
+    </form>
+  </div>
+</body>
+</html>
+{{ end }}

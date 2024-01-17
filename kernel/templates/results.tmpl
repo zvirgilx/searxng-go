@@ -1,0 +1,74 @@
+{{ define "results.tmpl" }}
+<!DOCTYPE html>
+<html>
+<head>
+  <title> {{ .title }} </title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+    }
+
+    #search-form {
+      margin-top: 20px;
+    }
+
+    #search-input {
+      width: 400px;
+      height: 30px;
+      padding: 5px;
+      font-size: 16px;
+    }
+
+    #search-button {
+      height: 40px;
+      font-size: 16px;
+      margin-left: 10px;
+    }
+
+    #search-results {
+      margin-top: 20px;
+    }
+
+    .result {
+      margin-bottom: 10px;
+    }
+
+    .result-title {
+      font-weight: bold;
+    }
+
+    .result-url {
+      color: #006621;
+    }
+
+    .result-content {
+      margin-top: 5px;
+    }
+
+    .result-img {
+      margin-top: 5px;
+    }
+
+  </style>
+</head>
+<body>
+  <div id="search-form">
+    <form action="/search" method="get">
+      <input type="text" id="search" name="q" placeholder="search...">
+      <button type="submit" id="search-button">search</button>
+    </form>
+  </div>
+
+  <div id="search-results">
+    {{range .results}}
+    <div class="result">
+    <img class="result-img" src={{ .ImgSrc }} style="height:240px;width:160px">
+    <h3 class="result-title"> {{ .Title }} </h3>
+    <a class="result-url" href=" {{ .Url }} "> {{ .Url }} </a>
+    <p class="result-content"> {{ .Content }} </p>
+    </div>
+    {{end}}
+  </div>
+</body>
+</html>
+{{ end }}
