@@ -6,15 +6,19 @@ networks:
 
 services:
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
     ports:
-      - 8888:8888
+      - 9999:9999
     container_name: searxng-go-api
     networks:
       - searxng-go
-    command: ["api"]
+    command: ["api", "-a", ":9999"]
   web:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
     ports:
       - 3000:3000
     container_name: searxng-go-web

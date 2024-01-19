@@ -6,5 +6,10 @@ if [ "$1" = "api" ]; then
 fi
 
 if [ "$1" = 'web' ]; then
-    exec node "/app/.output/server/index.mjs"
+    if [ ! -f /app/.output/server/index.mjs ]; then
+        cd /app/web
+        npm run dev
+    else
+        exec node "/app/.output/server/index.mjs"
+    fi
 fi
