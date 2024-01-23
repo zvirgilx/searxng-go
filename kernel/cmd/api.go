@@ -54,7 +54,9 @@ func runapi() {
 			"title": "searxng-go",
 		})
 	})
-	router.GET("/search", func(c *gin.Context) {
+
+	api := router.Group("/api")
+	api.GET("/search", func(c *gin.Context) {
 		opts, err := search.VerifySearchOptions(c)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"msg": err.Error()})
@@ -69,7 +71,7 @@ func runapi() {
 			"next_page_no": opts.PageNo + 1,
 		})
 	})
-	router.GET("/complete", func(c *gin.Context) {
+	api.GET("/complete", func(c *gin.Context) {
 		q, ok := c.GetQuery("q")
 		if !ok {
 			c.JSON(http.StatusBadRequest, gin.H{})

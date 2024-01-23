@@ -42,6 +42,10 @@ func (e *imdb) Request(ctx context.Context, opts *search.Options) error {
 	}
 
 	query := strings.ToLower(strings.Replace(opts.Query, " ", "_", -1))
+	if len(query) == 0 {
+		return nil
+	}
+
 	letter := query[0:1]
 	if !utf8.ValidString(letter) {
 		letter = "x"
