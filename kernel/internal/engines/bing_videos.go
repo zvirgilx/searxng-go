@@ -39,8 +39,8 @@ func init() {
 
 func (e *bingVideo) Request(ctx context.Context, opts *search.Options) error {
 	log := slog.With("func", "bing_videos.Request")
-	// example: https://www.bing.com/videos/asyncv2?q=test&async=content&first=1&count=35
 
+	// example: https://www.bing.com/videos/asyncv2?q=test&async=content&first=1&count=35
 	queryParams := url.Values{}
 	queryParams.Set("q", opts.Query)
 	queryParams.Set("async", "content")
@@ -60,7 +60,7 @@ func (e *bingVideo) Request(ctx context.Context, opts *search.Options) error {
 	return nil
 }
 
-var bingVideoRespRegex = regexp.MustCompile(`(?s)<div class="dg_u".*`)
+var bingVideoRespRegex = regexp.MustCompile(`(?s)<div class="vidres".*`)
 
 func (e *bingVideo) Response(ctx context.Context, opts *search.Options, resp []byte) (*result.Result, error) {
 	log := slog.With("func", "bing_videos.Response")
@@ -76,7 +76,7 @@ func (e *bingVideo) Response(ctx context.Context, opts *search.Options, resp []b
 	}
 
 	res := result.CreateResult(EngineNameBingVideos, opts.PageNo)
-	doc.Find("div.dg_u div[id^='mc_vtvc_video']").Each(func(i int, s *goquery.Selection) {
+	doc.Find("div[class=dg_u] div[id^='mc_vtvc_video']").Each(func(i int, s *goquery.Selection) {
 		vrhData, exists := s.Find("div.vrhdata").Attr("vrhm")
 		if !exists {
 			return
