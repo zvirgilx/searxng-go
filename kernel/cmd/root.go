@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/zvirgilx/searxng-go/kernel/config"
 	"github.com/zvirgilx/searxng-go/kernel/internal/complete"
+	"github.com/zvirgilx/searxng-go/kernel/internal/engines"
 	"github.com/zvirgilx/searxng-go/kernel/internal/engines/traits"
 	"github.com/zvirgilx/searxng-go/kernel/internal/network"
 	"github.com/zvirgilx/searxng-go/kernel/internal/result"
@@ -52,9 +53,15 @@ func initConfig() {
 		panic(err)
 	}
 
-	network.InitClient(config.Conf.Network.Timeout)
+	if err := network.InitClient(config.Conf.Network); err != nil {
+		panic(err)
+	}
 
 	result.InitScorer()
+
+	if err := engines.InitEngines(); err != nil {
+		panic(err)
+	}
 }
 
 func initLog() {

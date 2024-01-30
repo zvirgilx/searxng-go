@@ -5,45 +5,25 @@ import (
 	"errors"
 	"log/slog"
 	"strconv"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zvirgilx/searxng-go/kernel/internal/engine"
+	"github.com/zvirgilx/searxng-go/kernel/internal/metrics"
 	"github.com/zvirgilx/searxng-go/kernel/internal/network"
 	"github.com/zvirgilx/searxng-go/kernel/internal/result"
+	"github.com/zvirgilx/searxng-go/kernel/internal/util"
 	httputil "github.com/zvirgilx/searxng-go/kernel/internal/util/http"
 )
 
-type Engine interface {
-	Request(context.Context, *Options) error
-	Response(context.Context, *Options, []byte) (*result.Result, error)
-}
-
-var engines = map[string]map[string]Engine{}
-
-// RegisterEngine registers a search engine
-func RegisterEngine(name string, engine Engine, category string) {
-	if engines[category] == nil {
-		engines[category] = map[string]Engine{}
-	}
-	engines[category][name] = engine
-}
-
-// Options for search
-type Options struct {
-	Query     string
-	Url       string
-	PageNo    int
-	TimeRange string
-	Locale    string
-	Category  string
-}
-
-func Search(ctx context.Context, options Options) *result.Result {
+func Search(ctx context.Context, options engine.Options) *result.Result {
 	log := slog.With("func", "search.Search")
 
 	log.InfoContext(ctx, "starting search", "query", options.Query)
 
-	enableEngines := engines[options.Category]
+	enableEngines := engine.GetEnginesByCategory(options.Category)
 	if len(enableEngines) == 0 {
 		log.WarnContext(ctx, "engines not found", "category", options.Category)
 		return &result.Result{}
@@ -54,13 +34,15 @@ func Search(ctx context.Context, options Options) *result.Result {
 	w := &sync.WaitGroup{}
 	for _, e := range enableEngines {
 		w.Add(1)
-		go func(opts Options, e Engine) {
+		go func(opts engine.Options, e engine.Engine) {
 			defer w.Done()
+			defer util.RecoverFromPanic()
 			r, err := process(ctx, opts, e)
 			if err != nil {
-				log.ErrorContext(ctx, "err", err)
+				log.ErrorContext(ctx, "process error", slog.String("engine", e.GetName()), slog.String("err", err.Error()))
 				return
 			}
+
 			resCh <- r
 		}(options, e)
 	}
@@ -78,12 +60,24 @@ func Search(ctx context.Context, options Options) *result.Result {
 	return result
 }
 
-func process(ctx context.Context, options Options, engine Engine) (*result.Result, error) {
+func process(ctx context.Context, options engine.Options, e engine.Engine) (r *result.Result, err error) {
 	log := slog.With("func", "search.process")
 
-	err := engine.Request(ctx, &options)
-	if err != nil {
-		log.ErrorContext(ctx, "err", err)
+	start := time.Now()
+
+	defer func() {
+		status := "ok"
+		if err != nil {
+			status = "error"
+		}
+
+		metrics.EnginesResponseCounter.WithLabelValues(e.GetName(), status).Observe(time.Since(start).Seconds())
+		metrics.EnginesSearchResultCounter.WithLabelValues(e.GetName()).Add(float64(r.GetDataSize()))
+
+	}()
+
+	if err = e.Request(ctx, &options); err != nil {
+		log.ErrorContext(ctx, "request error", slog.String("engine", e.GetName()), slog.String("err", err.Error()))
 		return nil, err
 	}
 
@@ -91,21 +85,24 @@ func process(ctx context.Context, options Options, engine Engine) (*result.Resul
 		return nil, nil
 	}
 
-	// TODO: fix me
-	httpOpts := httputil.WithHeaders(map[string]string{"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.54 Safari/537.36"})
-	body, err := httputil.Get(ctx, network.GetClient(), options.Url, httpOpts)
+	body, err := httputil.Get(ctx, network.GetClient(), options.Url, strings.NewReader(options.Body), options.HTTPOptions...)
 	if err != nil {
-		log.ErrorContext(ctx, "err", err)
+		log.ErrorContext(ctx, "http get error", slog.String("engine", e.GetName()), slog.String("err", err.Error()))
 		return nil, err
 	}
 
-	return engine.Response(ctx, &options, body)
+	r, err = e.Response(ctx, &options, body)
+	if err != nil {
+		return nil, err
+	}
+
+	return r, nil
 }
 
-func VerifySearchOptions(c *gin.Context) (Options, error) {
+func VerifySearchOptions(c *gin.Context) (engine.Options, error) {
 	q, ok := c.GetQuery("q")
 	if !ok {
-		return Options{}, errors.New("query not found")
+		return engine.Options{}, errors.New("empty query input")
 	}
 
 	lang, ok := c.GetQuery("language")
@@ -118,7 +115,7 @@ func VerifySearchOptions(c *gin.Context) (Options, error) {
 	if ok {
 		num, err := strconv.Atoi(pageNo)
 		if err != nil || num < 0 {
-			return Options{}, errors.New("page number error")
+			return engine.Options{}, errors.New("page number error")
 		}
 		pageNum = num
 	}
@@ -128,7 +125,7 @@ func VerifySearchOptions(c *gin.Context) (Options, error) {
 		category = "general"
 	}
 
-	return Options{
+	return engine.Options{
 		Query:    q,
 		PageNo:   pageNum,
 		Locale:   lang,

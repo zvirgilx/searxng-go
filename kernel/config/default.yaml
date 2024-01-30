@@ -20,13 +20,6 @@ result:
           - field: "engine"
             operator: "in"
             values : ["imdb"]
-      - name: "engine_weight_normal"
-        score: 60
-        enable: true
-        conditions:
-          - field: "engine"
-            operator: "in"
-            values: [ "google", "bing_videos"]
       - name: "match_query"
         score: 5
         enable: true

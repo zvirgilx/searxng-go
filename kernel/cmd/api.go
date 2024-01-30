@@ -9,10 +9,12 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/zvirgilx/searxng-go/kernel/internal/complete"
 	"github.com/zvirgilx/searxng-go/kernel/internal/locale"
+	"github.com/zvirgilx/searxng-go/kernel/internal/metrics"
 	"github.com/zvirgilx/searxng-go/kernel/internal/search"
 	"github.com/zvirgilx/searxng-go/kernel/internal/util"
 	"github.com/zvirgilx/searxng-go/kernel/templates"
@@ -29,8 +31,10 @@ var apiCmd = &cobra.Command{
 
 func init() {
 	apiCmd.Flags().StringP("addr", "a", ":8888", "address to listen on")
+	apiCmd.Flags().StringP("internal-addr", "i", ":9998", "internal http address to listen on")
 	apiCmd.Flags().StringP("mode", "m", "debug", "gin mode(debug, release, test)")
 	viper.BindPFlag("addr", apiCmd.Flags().Lookup("addr"))
+	viper.BindPFlag("internal-addr", apiCmd.Flags().Lookup("internal-addr"))
 	viper.BindPFlag("mode", apiCmd.Flags().Lookup("mode"))
 
 	rootCmd.AddCommand(apiCmd)
@@ -45,6 +49,7 @@ func runapi() {
 	if viper.GetString("mode") == "debug" {
 		router.Use(cors.Default())
 	}
+	router.Use(metrics.Metrics())
 
 	tmpl := template.Must(template.New("").ParseFS(templates.Files, "*.tmpl"))
 	router.SetHTMLTemplate(tmpl)
@@ -83,6 +88,13 @@ func runapi() {
 			"results": r,
 		})
 	})
+
+	// http internal listen
+	go func() {
+		internalRouter := gin.Default()
+		internalRouter.GET("/metrics", gin.WrapH(promhttp.Handler()))
+		internalRouter.Run(viper.GetString("internal-addr"))
+	}()
 
 	router.Run(viper.GetString("addr"))
 }

@@ -8,8 +8,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/stretchr/objx"
+	"github.com/zvirgilx/searxng-go/kernel/internal/engine"
 	"github.com/zvirgilx/searxng-go/kernel/internal/result"
-	"github.com/zvirgilx/searxng-go/kernel/internal/search"
 )
 
 const (
@@ -29,10 +29,10 @@ type imdb struct {
 }
 
 func init() {
-	search.RegisterEngine(EngineNameIMDB, &imdb{}, CategoryGeneral)
+	engine.RegisterEngine(EngineNameIMDB, &imdb{}, engine.CategoryGeneral)
 }
 
-func (e *imdb) Request(ctx context.Context, opts *search.Options) error {
+func (e *imdb) Request(ctx context.Context, opts *engine.Options) error {
 	log := slog.With("func", "imdb.Request")
 
 	// imdb engine does not support finding the next page.
@@ -55,7 +55,7 @@ func (e *imdb) Request(ctx context.Context, opts *search.Options) error {
 	return nil
 }
 
-func (e *imdb) Response(ctx context.Context, opts *search.Options, resp []byte) (*result.Result, error) {
+func (e *imdb) Response(ctx context.Context, opts *engine.Options, resp []byte) (*result.Result, error) {
 	log := slog.With("func", "imdb.Response")
 
 	log.DebugContext(ctx, "response", "resp", string(resp))
@@ -109,4 +109,8 @@ func (e *imdb) Response(ctx context.Context, opts *search.Options, resp []byte) 
 	})
 
 	return res, nil
+}
+
+func (e *imdb) GetName() string {
+	return EngineNameIMDB
 }

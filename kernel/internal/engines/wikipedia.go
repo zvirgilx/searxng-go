@@ -7,9 +7,9 @@ import (
 	"net/url"
 
 	"github.com/stretchr/objx"
+	"github.com/zvirgilx/searxng-go/kernel/internal/engine"
 	"github.com/zvirgilx/searxng-go/kernel/internal/engines/traits"
 	"github.com/zvirgilx/searxng-go/kernel/internal/result"
-	"github.com/zvirgilx/searxng-go/kernel/internal/search"
 )
 
 const EngineNameWikipedia = "wikipedia"
@@ -17,10 +17,10 @@ const EngineNameWikipedia = "wikipedia"
 type wikipedia struct{}
 
 func init() {
-	search.RegisterEngine(EngineNameWikipedia, &wikipedia{}, CategoryGeneral)
+	engine.RegisterEngine(EngineNameWikipedia, &wikipedia{}, engine.CategoryGeneral)
 }
 
-func (w *wikipedia) Request(ctx context.Context, opts *search.Options) error {
+func (w *wikipedia) Request(ctx context.Context, opts *engine.Options) error {
 	// if not the first page, not request wikipedia for information.
 	if opts.PageNo > 1 {
 		return nil
@@ -33,7 +33,7 @@ func (w *wikipedia) Request(ctx context.Context, opts *search.Options) error {
 	return nil
 }
 
-func (w *wikipedia) Response(ctx context.Context, opts *search.Options, resp []byte) (*result.Result, error) {
+func (w *wikipedia) Response(ctx context.Context, opts *engine.Options, resp []byte) (*result.Result, error) {
 	log := slog.With("func", "wikipedia.Response")
 	m, err := objx.FromJSON(string(resp))
 	if err != nil {
@@ -87,4 +87,8 @@ func getWikiInfo(locale string) (string, string) {
 		}
 	}
 	return engTag, wikiNetLoc
+}
+
+func (w *wikipedia) GetName() string {
+	return EngineNameWikipedia
 }

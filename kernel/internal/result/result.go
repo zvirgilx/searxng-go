@@ -90,6 +90,13 @@ func (r *Result) AppendData(data Data) {
 	r.MergedData = append(r.MergedData, data)
 }
 
+func (r *Result) GetDataSize() int {
+	if r == nil {
+		return 0
+	}
+	return len(r.MergedData)
+}
+
 func (r *Result) GetSortedData() []Data {
 	r.sortData()
 	return r.MergedData

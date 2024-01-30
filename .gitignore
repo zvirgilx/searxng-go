@@ -1,2 +1,5 @@
 .vscode
 node_modules
+.idea
+
+kernel/config/custom.yaml

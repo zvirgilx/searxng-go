@@ -44,13 +44,13 @@ func NewClient(timeout time.Duration) *http.Client {
 }
 
 // Get HTTP GET
-func Get(ctx context.Context, cli *http.Client, url string, opts ...RequestOption) ([]byte, error) {
+func Get(ctx context.Context, cli *http.Client, url string, reqBody io.Reader, opts ...RequestOption) ([]byte, error) {
 	if cli == nil {
 		return nil, ErrInvalidHTTPClient
 	}
 
 	log := slog.With("func", "Get")
-	o, err := newRequest(ctx, http.MethodGet, url, nil, opts...)
+	o, err := newRequest(ctx, http.MethodGet, url, reqBody, opts...)
 	if err != nil {
 		return nil, err
 	}

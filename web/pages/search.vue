@@ -5,12 +5,12 @@
 
       <div id="results">
         <div class="urls">
-          <div v-if="loading">
+          <div v-if="searchStore.loading">
             <SearchLoading></SearchLoading>
           </div>
           <div v-else>
-            <template v-if="results.length > 0">
-              <article class="result" v-for="item in results" :key="item.url">
+            <template v-if="searchStore.results.length > 0">
+              <article class="result" v-for="item in searchStore.results" :key="item.url">
                 <a
                   target="_blank"
                   v-if="item.img_src || item.thumbnail"
@@ -21,7 +21,7 @@
                 </a>
                 <h3>
                   <a target="_blank" :href="item.url" rel="noreferrer">
-                    <span v-html="getHighlightedText(item.title, q)"></span>
+                    <span v-html="getHighlightedText(item.title, searchStore.q)"></span>
                   </a>
                 </h3>
                 <p class="content">
@@ -60,8 +60,8 @@
             </svg></a>
         </div> -->
 
-        <div v-if="results.length !== 0">
-          <Pagination :total="total"></Pagination>
+        <div v-if="searchStore.results.length !== 0">
+          <Pagination :total="searchStore.total"></Pagination>
         </div>
       </div>
     </main>
@@ -72,48 +72,14 @@
 
 <script setup>
 import { getHighlightedText } from "~/utils";
-const { routeChangeListener, getPageNo } = useCustomRouter();
+import { useSearchStore } from "~/stores/search";
 
-const results = ref([]);
-const total = ref(0);
-const loading = ref(false);
-const q = ref("");
+const { searchStore, getSearchResults } = useSearchStore();
 
-routeChangeListener(() => {
-  searchInit();
-});
+getSearchResults();
 
 function getCacheUrl(url) {
   return `https://web.archive.org/web/${url}`;
-}
-
-async function searchInit() {
-  console.log("call searchInit");
-
-  const route = useRoute();
-
-  loading.value = true;
-  results.value = [];
-
-  q.value = route.query.q ?? "";
-
-  const page_no = getPageNo();
-  const data = await useFetchSearch(q, page_no);
-
-  try {
-    console.log("data", data, data.value, data.value.results, typeof data.value.results);
-
-    if (data?.value?.results) {
-      results.value = data.value.results;
-
-      // no total, so set 100
-      total.value = 100;
-    }
-  } catch (err) {
-    console.error(err);
-  }
-
-  loading.value = false;
 }
 </script>
 

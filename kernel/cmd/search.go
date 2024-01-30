@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 
 	"github.com/spf13/cobra"
+	"github.com/zvirgilx/searxng-go/kernel/internal/engine"
 	"github.com/zvirgilx/searxng-go/kernel/internal/search"
 )
 
@@ -27,7 +28,7 @@ func init() {
 
 func runSearch(cmd *cobra.Command, args []string) {
 	q := args[0]
-	r := search.Search(context.Background(), search.Options{Query: q})
+	r := search.Search(context.Background(), engine.Options{Query: q})
 	d, _ := json.MarshalIndent(r, "", "  ")
 	cmd.Println(string(d))
 }

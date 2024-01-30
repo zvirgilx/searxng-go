@@ -12,11 +12,11 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/zvirgilx/searxng-go/kernel/internal/complete"
+	"github.com/zvirgilx/searxng-go/kernel/internal/engine"
 	"github.com/zvirgilx/searxng-go/kernel/internal/engines/traits"
 	"github.com/zvirgilx/searxng-go/kernel/internal/locale"
 	"github.com/zvirgilx/searxng-go/kernel/internal/network"
 	"github.com/zvirgilx/searxng-go/kernel/internal/result"
-	"github.com/zvirgilx/searxng-go/kernel/internal/search"
 	"github.com/zvirgilx/searxng-go/kernel/internal/util"
 	httputil "github.com/zvirgilx/searxng-go/kernel/internal/util/http"
 )
@@ -36,11 +36,11 @@ var (
 type google struct{}
 
 func init() {
-	search.RegisterEngine(EngineNameGoogle, &google{}, CategoryGeneral)
+	engine.RegisterEngine(EngineNameGoogle, &google{}, engine.CategoryGeneral)
 	complete.RegisterCompleter(EngineNameGoogle, &google{})
 }
 
-func (g *google) Request(ctx context.Context, opts *search.Options) error {
+func (g *google) Request(ctx context.Context, opts *engine.Options) error {
 	log := slog.With("func", "google.Request")
 
 	queryParams := url.Values{}
@@ -65,11 +65,14 @@ func (g *google) Request(ctx context.Context, opts *search.Options) error {
 
 	opts.Url = queryUrl
 	log.DebugContext(ctx, "request", "url", opts.Url)
+
+	httpOpts := httputil.WithHeaders(map[string]string{"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.54 Safari/537.36"})
+	opts.SetHTTPOptions(httpOpts)
 	return nil
 
 }
 
-func (g *google) Response(ctx context.Context, opts *search.Options, bytes []byte) (*result.Result, error) {
+func (g *google) Response(ctx context.Context, opts *engine.Options, bytes []byte) (*result.Result, error) {
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(string(bytes)))
 	if err != nil {
 		return nil, errors.New("error parsing document")
@@ -125,7 +128,7 @@ func (g *google) Complete(ctx context.Context, q string, locale string) []comple
 	queryParams.Set("hl", param["hl"])
 
 	queryUrl := fmt.Sprintf("https://%s/complete/search?%s", info["subdomain"], queryParams.Encode())
-	resp, err := httputil.Get(ctx, network.GetClient(), queryUrl)
+	resp, err := httputil.Get(ctx, network.GetClient(), queryUrl, nil)
 	if err != nil {
 		log.ErrorContext(ctx, "err", err)
 		return nil
@@ -190,4 +193,8 @@ func GetGoogleInfo(params map[string]string) map[string]interface{} {
 
 	info["param"] = param
 	return info
+}
+
+func (g *google) GetName() string {
+	return EngineNameGoogle
 }

@@ -12,8 +12,8 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/zvirgilx/searxng-go/kernel/internal/engine"
 	"github.com/zvirgilx/searxng-go/kernel/internal/result"
-	"github.com/zvirgilx/searxng-go/kernel/internal/search"
 )
 
 const (
@@ -33,18 +33,18 @@ var (
 type bingVideo struct{}
 
 func init() {
-	search.RegisterEngine(EngineNameBingVideos, &bingVideo{}, CategoryGeneral)
-	search.RegisterEngine(EngineNameBingVideos, &bingVideo{}, CategoryVideo)
+	engine.RegisterEngine(EngineNameBingVideos, &bingVideo{}, engine.CategoryGeneral)
+	engine.RegisterEngine(EngineNameBingVideos, &bingVideo{}, engine.CategoryVideo)
 }
 
-func (e *bingVideo) Request(ctx context.Context, opts *search.Options) error {
+func (e *bingVideo) Request(ctx context.Context, opts *engine.Options) error {
 	log := slog.With("func", "bing_videos.Request")
 
 	// example: https://www.bing.com/videos/asyncv2?q=test&async=content&first=1&count=35
 	queryParams := url.Values{}
 	queryParams.Set("q", opts.Query)
 	queryParams.Set("async", "content")
-	queryParams.Set("first", strconv.Itoa((opts.PageNo-1)*10+1))
+	queryParams.Set("first", strconv.Itoa((opts.PageNo-1)*10))
 	queryParams.Set("count", "10")
 
 	// example: one day (60 * 24 minutes) '&qft= filterui:videoage-lt1440&form=VRFLTR'
@@ -60,15 +60,32 @@ func (e *bingVideo) Request(ctx context.Context, opts *search.Options) error {
 	return nil
 }
 
-var bingVideoRespRegex = regexp.MustCompile(`(?s)<div class="vidres".*`)
+// match available html content.
+var bingVideoRespRegex = regexp.MustCompile(`(?s)<div class="dg_u".*`)
 
-func (e *bingVideo) Response(ctx context.Context, opts *search.Options, resp []byte) (*result.Result, error) {
+// Sometimes the html of the first page does not as same format as others.
+// So it is compatible with the parsing of the first page.
+var bingVideoFirstHTMLRespRegex = regexp.MustCompile(`(?s)<div class="mc_fgvc_u.*`)
+
+func (e *bingVideo) Response(ctx context.Context, opts *engine.Options, resp []byte) (*result.Result, error) {
 	log := slog.With("func", "bing_videos.Response")
 
-	matches := bingVideoRespRegex.FindStringSubmatch(string(resp))
+	body := string(resp)
+
+	// default xpath selector
+	xPath := "div[class=dg_u] div[id^='mc_vtvc_video']"
+
+	matches := bingVideoRespRegex.FindStringSubmatch(body)
 	if len(matches) == 0 {
-		return nil, errors.New("error parsing document")
+		matches = bingVideoFirstHTMLRespRegex.FindStringSubmatch(body)
+		if len(matches) == 0 {
+			return nil, errors.New("failed to parse bing videos html")
+		}
+
+		// compatible xpath selector
+		xPath = "div[id^=mc_vtvc__]"
 	}
+
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(matches[0]))
 	if err != nil {
 		log.ErrorContext(ctx, "err", err)
@@ -76,7 +93,7 @@ func (e *bingVideo) Response(ctx context.Context, opts *search.Options, resp []b
 	}
 
 	res := result.CreateResult(EngineNameBingVideos, opts.PageNo)
-	doc.Find("div[class=dg_u] div[id^='mc_vtvc_video']").Each(func(i int, s *goquery.Selection) {
+	doc.Find(xPath).Each(func(i int, s *goquery.Selection) {
 		vrhData, exists := s.Find("div.vrhdata").Attr("vrhm")
 		if !exists {
 			return
@@ -102,4 +119,8 @@ func (e *bingVideo) Response(ctx context.Context, opts *search.Options, resp []b
 	})
 
 	return res, nil
+}
+
+func (e *bingVideo) GetName() string {
+	return EngineNameBingVideos
 }

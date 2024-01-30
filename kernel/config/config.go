@@ -12,9 +12,26 @@ import (
 var defaultConfig []byte
 
 type Config struct {
+	Search   SearchConfig   `mapstructure:"search"`
 	Complete CompleteConfig `mapstructure:"complete"`
 	Network  NetworkConfig  `mapstructure:"network"`
 	Result   ResultConfig   `mapstructure:"result"`
+}
+
+type SearchConfig struct {
+	Engines Engines `mapstructure:"engines"`
+}
+
+type Engines struct {
+	ElasticSearch ElasticSearch `mapstructure:"elastic_search"`
+}
+
+type ElasticSearch struct {
+	Enable     bool   `mapstructure:"enable"`      // Whether to enable the engine.
+	BaseUrl    string `mapstructure:"base_url"`    // BaseUrl is elastic search access url.
+	Index      string `mapstructure:"index"`       // Index used by search.
+	QueryType  string `mapstructure:"query_type"`  // The type of query, such as match,term, etc.
+	QueryField string `mapstructure:"query_field"` // The fields of the query, such as title, content, etc.
 }
 
 type CompleteConfig struct {
@@ -22,7 +39,8 @@ type CompleteConfig struct {
 }
 
 type NetworkConfig struct {
-	Timeout time.Duration `mapstructure:"timeout"`
+	Timeout  time.Duration `mapstructure:"timeout"`
+	ProxyUrl string        `mapstructure:"proxy_url"`
 }
 
 type ResultConfig struct {

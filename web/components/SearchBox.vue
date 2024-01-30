@@ -110,7 +110,11 @@
 
         <div class="autocomplete" :class="{ open: autocompleteIsShow }">
           <ul>
-            <li @click="goPage(1, q)" :data-autocomplete-value="q" v-for="q in autocompleteArr">
+            <li
+              @click="onAutocompleteItemClick(q)"
+              :data-autocomplete-value="q"
+              v-for="q in autocompleteArr"
+            >
               <span v-html="getHighlightedText(q, searchValue)"></span>
             </li>
 
@@ -137,7 +141,9 @@
 import { debounce } from "lodash-es";
 import { useCustomRouter } from "~/utils/hooks";
 import { getHighlightedText } from "~/utils";
-// import autocompleteData from "~/assets/mock/autocompleter.json";
+import { useSearchStore } from "~/stores/search";
+
+const { getSearchResults } = useSearchStore();
 
 const { goPage, routeChangeListener } = useCustomRouter();
 const completeCache = {};
@@ -164,6 +170,12 @@ watch(searchValue, () => {
     searchDebounceForAutocompleteHandler();
   }
 });
+
+function onAutocompleteItemClick(q) {
+  goPage(1, q).then((_) => {
+    getSearchResults();
+  });
+}
 
 function searchInputFocusHandler() {
   searchValueIsFocus.value = true;

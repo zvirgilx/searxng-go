@@ -46,7 +46,9 @@
 <script setup>
 import { useCustomRouter } from "~/utils/hooks";
 const { goPage, routeChangeListener } = useCustomRouter();
+import { useSearchStore } from "~/stores/search";
 
+const { getSearchResults } = useSearchStore();
 const props = defineProps({
   total: {
     type: Number,
@@ -82,18 +84,22 @@ function scrollTop() {
 }
 
 function goCurPage(page) {
-  scrollTop();
-  goPage(page);
+  goPageCommon(page);
 }
 
 function goPrevPage() {
-  scrollTop();
-  goPage(curPage - 1);
+  goPageCommon(curPage - 1);
 }
 
 function goNextPage() {
+  goPageCommon(curPage + 1);
+}
+
+function goPageCommon(pageNumber) {
   scrollTop();
-  goPage(curPage + 1);
+  goPage(pageNumber).then((_) => {
+    getSearchResults();
+  });
 }
 
 function getPagesNumberArrByCurPage(curPage) {

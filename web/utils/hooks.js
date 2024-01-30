@@ -25,7 +25,9 @@ export function useCustomRouter() {
       q = route.query.q ?? "";
     }
 
-    router.push({
+    // location.href = `/search?q=${encodeURIComponent(q)}&page_no=${getPageNo(page_no)}`;
+
+    return router.push({
       path: "/search",
       query: {
         q,

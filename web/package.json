@@ -16,8 +16,10 @@
     "vue-router": "^4.2.5"
   },
   "dependencies": {
+    "@pinia/nuxt": "^0.5.1",
     "highlight-words-core": "^1.2.2",
     "lodash-es": "^4.17.21",
+    "pinia": "^2.1.7",
     "prettier": "^3.1.1"
   }
 }
