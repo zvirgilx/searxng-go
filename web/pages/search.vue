@@ -11,23 +11,25 @@
           <div v-else>
             <template v-if="searchStore.results.length > 0">
               <article class="result" v-for="item in searchStore.results" :key="item.url">
-                <a
-                  target="_blank"
-                  v-if="item.img_src || item.thumbnail"
-                  :href="item.url"
-                  rel="noreferrer"
-                >
-                  <img class="image" :src="item.img_src || item.thumbnail" :title="item.title" />
-                </a>
                 <h3>
                   <a target="_blank" :href="item.url" rel="noreferrer">
+                    <cite>{{ formatUrl(item.url) }}</cite>
                     <span v-html="getHighlightedText(item.title, searchStore.q)"></span>
                   </a>
                 </h3>
+
                 <p class="content">
+                  <a
+                    target="_blank"
+                    v-if="item.img_src || item.thumbnail"
+                    :href="item.url"
+                    rel="noreferrer"
+                  >
+                    <img class="image" :src="item.img_src || item.thumbnail" :title="item.title" />
+                  </a>
                   {{ item.content }}
                 </p>
-                <div class="engines">
+                <!-- <div class="engines">
                   <span>{{ item.engine }}</span>
                   <a
                     target="_blank"
@@ -37,7 +39,7 @@
                   >
                     cached
                   </a>
-                </div>
+                </div> -->
               </article>
             </template>
             <template v-else>
@@ -81,6 +83,31 @@ getSearchResults();
 function getCacheUrl(url) {
   return `https://web.archive.org/web/${url}`;
 }
+
+function formatUrl(url) {
+  try {
+    const urlObj = new URL(url);
+    const newUrl = urlObj.origin + urlObj.pathname;
+
+    const arr = newUrl.split("//");
+    if (arr && arr[1]) {
+      const str = arr[1];
+
+      const arr2 = str
+        .split("/")
+        .map((item) => decodeURIComponent(item))
+        .filter((item) => {
+          return item.trim() !== "";
+        });
+
+      return arr[0] + "//" + arr2.join(" › ");
+    }
+  } catch (err) {
+    console.error("formatUrl", err);
+  }
+
+  return url;
+}
 </script>
 
 <style lang="less">
@@ -96,18 +123,20 @@ function getCacheUrl(url) {
 .result {
   margin: @results-margin 0;
   padding: @result-padding;
+  clear: both;
   // .ltr-border-left(0.2rem solid transparent);
 
   h3 {
     font-size: 1.1rem;
     line-height: 1.2;
     word-wrap: break-word;
-    margin: 0.4rem 0 0.4rem 0;
+    margin: 0.4rem 0 0.6rem 0;
     padding: 0;
 
     a {
       color: var(--color-result-link-font);
       font-weight: normal;
+      font-size: 18px;
 
       &:visited {
         color: var(--color-result-link-visited-font);
@@ -115,9 +144,22 @@ function getCacheUrl(url) {
 
       &:focus,
       &:hover {
-        text-decoration: underline;
         border: none;
         outline: none;
+
+        span {
+          text-decoration: underline;
+        }
+      }
+
+      cite {
+        // color: #4d5156;
+        font-family: arial;
+        color: var(--color-base-font);
+        font-size: 12px;
+        display: block;
+        word-break: break-all;
+        margin-bottom: 0.2rem;
       }
 
       span {
@@ -136,6 +178,8 @@ function getCacheUrl(url) {
 
   .content {
     font-size: 0.9em;
+    clear: both;
+    overflow: hidden;
     margin: 0;
     padding: 0;
     max-width: 54em;
@@ -153,12 +197,16 @@ function getCacheUrl(url) {
       background: inherit;
       font-weight: bold;
     }
+
+    img {
+      border-radius: 4px;
+    }
   }
 
   img {
     &.image {
       float: left;
-      margin: 0.5rem 1rem 0 0;
+      margin: 0 1rem 0 0;
       width: 7rem;
       max-height: 7rem;
       object-fit: scale-down;

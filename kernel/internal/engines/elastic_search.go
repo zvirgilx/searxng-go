@@ -20,11 +20,11 @@ const (
 type elasticSearch struct{}
 
 var (
-	baseUrl    = "127.0.0.1:9200"
-	index      = ""
-	searchUrl  = ""
-	queryType  = "match"
-	queryField = "title"
+	baseUrl     = "127.0.0.1:9200"
+	index       = ""
+	searchUrl   = ""
+	queryType   = "match"
+	queryFields = []string{"title"}
 )
 
 func init() {
@@ -50,8 +50,8 @@ func InitElasticSearch() {
 	if t := conf.QueryType; t != "" {
 		queryType = t
 	}
-	if field := conf.QueryField; field != "" {
-		queryField = field
+	if fields := conf.QueryFields; len(fields) != 0 {
+		queryFields = fields
 	}
 
 }
@@ -71,7 +71,7 @@ func (e *elasticSearch) Request(ctx context.Context, opts *engine.Options) error
 	}
 
 	// The request body is the query condition of es.
-	opts.Body = f(queryField, opts.Query)
+	opts.Body = f(opts.Query, queryFields...)
 
 	httpOpts := httputil.WithHeaders(map[string]string{"Content-Type": "application/json"})
 	opts.SetHTTPOptions(httpOpts)
@@ -99,7 +99,7 @@ func (e *elasticSearch) Response(ctx context.Context, opts *engine.Options, resp
 		r := v.Get("_source").ObjxMap()
 
 		title := r.Get("title").Str()
-		content := r.Get("content").Str()
+		content := r.Get("description").Str()
 		imgSrc := r.Get("poster").Str()
 		url := r.Get("url").Str()
 
@@ -118,18 +118,21 @@ func (e *elasticSearch) Response(ctx context.Context, opts *engine.Options, resp
 	return res, nil
 }
 
-type queryFunc func(key, value string) string
+type queryFunc func(value string, keys ...string) string
 
 var availableQueryFunc = map[string]queryFunc{
-	"match": matchQuery,
-	"term":  termQuery,
+	"match":       matchQuery,
+	"multi_match": multiMatchQuery,
 }
 
-func matchQuery(key, value string) string {
+func matchQuery(value string, keys ...string) string {
+	if len(keys) == 0 {
+		return ""
+	}
 	q := map[string]interface{}{
 		"query": map[string]interface{}{
 			"match": map[string]interface{}{
-				key: map[string]interface{}{
+				keys[0]: map[string]interface{}{
 					"query": value,
 				},
 			},
@@ -140,11 +143,12 @@ func matchQuery(key, value string) string {
 	return string(d)
 }
 
-func termQuery(key, value string) string {
+func multiMatchQuery(value string, keys ...string) string {
 	q := map[string]interface{}{
 		"query": map[string]interface{}{
-			"term": map[string]interface{}{
-				key: value,
+			"multi_match": map[string]interface{}{
+				"query":  value,
+				"fields": keys,
 			},
 		},
 	}

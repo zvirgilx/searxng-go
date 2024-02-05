@@ -27,11 +27,11 @@ type Engines struct {
 }
 
 type ElasticSearch struct {
-	Enable     bool   `mapstructure:"enable"`      // Whether to enable the engine.
-	BaseUrl    string `mapstructure:"base_url"`    // BaseUrl is elastic search access url.
-	Index      string `mapstructure:"index"`       // Index used by search.
-	QueryType  string `mapstructure:"query_type"`  // The type of query, such as match,term, etc.
-	QueryField string `mapstructure:"query_field"` // The fields of the query, such as title, content, etc.
+	Enable      bool     `mapstructure:"enable"`       // Whether to enable the engine.
+	BaseUrl     string   `mapstructure:"base_url"`     // BaseUrl is elastic search access url.
+	Index       string   `mapstructure:"index"`        // Index used by search.
+	QueryType   string   `mapstructure:"query_type"`   // The type of query, such as match,term, etc.
+	QueryFields []string `mapstructure:"query_fields"` // The fields of the query, such as title, content, etc.
 }
 
 type CompleteConfig struct {
