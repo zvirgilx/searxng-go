@@ -5,17 +5,14 @@ import (
 	"errors"
 	"log/slog"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zvirgilx/searxng-go/kernel/internal/engine"
 	"github.com/zvirgilx/searxng-go/kernel/internal/metrics"
-	"github.com/zvirgilx/searxng-go/kernel/internal/network"
 	"github.com/zvirgilx/searxng-go/kernel/internal/result"
 	"github.com/zvirgilx/searxng-go/kernel/internal/util"
-	httputil "github.com/zvirgilx/searxng-go/kernel/internal/util/http"
 )
 
 func Search(ctx context.Context, options engine.Options) *result.Result {
@@ -60,7 +57,7 @@ func Search(ctx context.Context, options engine.Options) *result.Result {
 	return result
 }
 
-func process(ctx context.Context, options engine.Options, e engine.Engine) (r *result.Result, err error) {
+func process(ctx context.Context, options engine.Options, e engine.Engine) (res *result.Result, err error) {
 	log := slog.With("func", "search.process")
 
 	start := time.Now()
@@ -72,31 +69,31 @@ func process(ctx context.Context, options engine.Options, e engine.Engine) (r *r
 		}
 
 		metrics.EnginesResponseCounter.WithLabelValues(e.GetName(), status).Observe(time.Since(start).Seconds())
-		metrics.EnginesSearchResultCounter.WithLabelValues(e.GetName()).Add(float64(r.GetDataSize()))
+		metrics.EnginesSearchResultCounter.WithLabelValues(e.GetName()).Add(float64(res.GetDataSize()))
 
 	}()
 
 	if err = e.Request(ctx, &options); err != nil {
-		log.ErrorContext(ctx, "request error", slog.String("engine", e.GetName()), slog.String("err", err.Error()))
 		return nil, err
 	}
 
-	if options.Url == "" {
+	req := options.Request
+	if req == nil {
 		return nil, nil
 	}
 
-	body, err := httputil.Get(ctx, network.GetClient(), options.Url, strings.NewReader(options.Body), options.HTTPOptions...)
+	r := req.Do(ctx)
+	if r.Err != nil {
+		log.ErrorContext(ctx, "request engine error", slog.String("engine", e.GetName()), slog.String("err", r.Err.Error()))
+		return nil, r.Err
+	}
+
+	res, err = e.Response(ctx, &options, r.Body)
 	if err != nil {
-		log.ErrorContext(ctx, "http get error", slog.String("engine", e.GetName()), slog.String("err", err.Error()))
 		return nil, err
 	}
 
-	r, err = e.Response(ctx, &options, body)
-	if err != nil {
-		return nil, err
-	}
-
-	return r, nil
+	return res, nil
 }
 
 func VerifySearchOptions(c *gin.Context) (engine.Options, error) {

@@ -18,7 +18,6 @@ import (
 	"github.com/zvirgilx/searxng-go/kernel/internal/network"
 	"github.com/zvirgilx/searxng-go/kernel/internal/result"
 	"github.com/zvirgilx/searxng-go/kernel/internal/util"
-	httputil "github.com/zvirgilx/searxng-go/kernel/internal/util/http"
 )
 
 const (
@@ -33,43 +32,41 @@ var (
 		"year":  "y"}
 )
 
-type google struct{}
+type google struct {
+	client *network.Client
+}
 
 func init() {
-	engine.RegisterEngine(EngineNameGoogle, &google{}, engine.CategoryGeneral)
-	complete.RegisterCompleter(EngineNameGoogle, &google{})
+	complete.RegisterCompleter(EngineNameGoogle, &google{client: network.DefaultClient()})
+	engine.RegisterGlobalEngine(&google{client: network.DefaultClient()}, engine.CategoryGeneral)
 }
 
 func (g *google) Request(ctx context.Context, opts *engine.Options) error {
-	log := slog.With("func", "google.Request")
-
-	queryParams := url.Values{}
-	queryParams.Set("q", opts.Query)
-	queryParams.Set("filter", "0")
-	queryParams.Set("start", strconv.Itoa((opts.PageNo-1)*10))
-	queryParams.Set("async", "use_ac:true,_fmt:prog")
-
 	info := GetGoogleInfo(map[string]string{"locale": opts.Locale})
-	param := info["param"].(map[string]string)
-	queryParams.Set("hl", param["hl"])
-	queryParams.Set("lr", param["lr"])
-	queryParams.Set("cr", param["cr"])
-
-	queryUrl := fmt.Sprintf("https://%s/search?%s", info["subdomain"], queryParams.Encode())
-
-	if t, ok := googleTimeRangeMap[opts.TimeRange]; ok {
-		qP := url.Values{}
-		qP.Set("tbs", "qdr:"+t)
-		queryUrl += "&" + qP.Encode()
+	base, err := url.ParseRequestURI(fmt.Sprintf("https://%s", info["subdomain"]))
+	if err != nil {
+		return err
 	}
 
-	opts.Url = queryUrl
-	log.DebugContext(ctx, "request", "url", opts.Url)
+	r := g.client.Get().Base(base).Path("search").
+		Param("q", opts.Query).
+		Param("filter", "0").
+		Param("start", strconv.Itoa((opts.PageNo-1)*10)).
+		Param("async", "use_ac:true,_fmt:prog")
 
-	httpOpts := httputil.WithHeaders(map[string]string{"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.54 Safari/537.36"})
-	opts.SetHTTPOptions(httpOpts)
+	if param, ok := info["param"].(map[string]string); ok {
+		r.Param("hl", param["hl"]).
+			Param("lr", param["lr"]).
+			Param("cr", param["cr"])
+	}
+
+	if t, ok := googleTimeRangeMap[opts.TimeRange]; ok {
+		r.Param("tbs", "qdr:"+t)
+	}
+
+	r.Header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.54 Safari/537.36")
+	opts.Request = r
 	return nil
-
 }
 
 func (g *google) Response(ctx context.Context, opts *engine.Options, bytes []byte) (*result.Result, error) {
@@ -99,7 +96,7 @@ func (g *google) Response(ctx context.Context, opts *engine.Options, bytes []byt
 			return
 		}
 
-		res.AppendData(result.Data{
+		res.AppendData(&result.Data{
 			Engine:  EngineNameGoogle,
 			Title:   title,
 			Url:     link,
@@ -119,22 +116,26 @@ func (g *google) Response(ctx context.Context, opts *engine.Options, bytes []byt
 func (g *google) Complete(ctx context.Context, q string, locale string) []complete.Result {
 	log := slog.With("func", "google.Complete")
 
-	queryParams := url.Values{}
-	queryParams.Set("q", q)
-	queryParams.Set("client", "chrome")
-
 	info := GetGoogleInfo(map[string]string{"locale": locale})
 	param := info["param"].(map[string]string)
-	queryParams.Set("hl", param["hl"])
 
-	queryUrl := fmt.Sprintf("https://%s/complete/search?%s", info["subdomain"], queryParams.Encode())
-	resp, err := httputil.Get(ctx, network.GetClient(), queryUrl, nil)
+	base, err := url.ParseRequestURI(fmt.Sprintf("https://%s", info["subdomain"]))
 	if err != nil {
+		log.ErrorContext(ctx, "failed to parse google complete base url", slog.String("err", err.Error()))
+		return nil
+	}
+	req := g.client.Get().Base(base).Path("/complete/search").
+		Param("q", q).
+		Param("client", "chrome").
+		Param("hl", param["hl"])
+
+	res := req.Do(ctx)
+	if res.Err != nil {
 		log.ErrorContext(ctx, "err", err)
 		return nil
 	}
 	var data []interface{}
-	err = json.Unmarshal(resp, &data)
+	err = json.Unmarshal(res.Body, &data)
 	if err != nil {
 		log.ErrorContext(ctx, "err", err)
 		return nil
@@ -197,4 +198,9 @@ func GetGoogleInfo(params map[string]string) map[string]interface{} {
 
 func (g *google) GetName() string {
 	return EngineNameGoogle
+}
+
+func (g *google) ApplyConfig(conf engine.Config) error {
+	g.client = network.NewClient(conf.Client)
+	return nil
 }

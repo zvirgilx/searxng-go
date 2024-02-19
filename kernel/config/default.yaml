@@ -6,11 +6,7 @@ network:
 
 result:
   score:
-    scorer: "weight" # use rule scorer.
-    weight: # weight map for weight scorer.
-      "imdb": 10
-      "google": 8
-      "bing_videos": 8
+    scorer: "rule" # use rule scorer.
     metadata_fields: ["engine", "title", "content", "$QUERY"] # enable metadata fields, used for rule scorer.
     rules:
       - name: "engine_weight_imdb" # rule name.
@@ -19,18 +15,30 @@ result:
         conditions: # A rule is matched only when all conditions are matched.
           - field: "engine"
             operator: "in"
-            values : ["imdb"]
+            expects : ["imdb","fmovies","elastic_search"]
       - name: "match_query"
         score: 5
         enable: true
         conditions:
           - field: "title"
             operator: "containAny"
-            values: ["$QUERY"]
+            expects: ["$QUERY"]
 
   limits:
     first:  # only for the first page of result
       - imdb: 1 # Maximum of imdb results to be shown
 
 
-
+engines:
+  general:
+    google:
+      enable: true
+    elastic_search:
+      enable: true
+      extra:
+        base_url: http://127.0.0.1:9200
+        index: test-1
+        query_type: multi_match
+        query_fields: ["title","description"]
+    bing_videos:
+      enable: true

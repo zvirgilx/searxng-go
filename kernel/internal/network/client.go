@@ -3,44 +3,48 @@ package network
 import (
 	"net/http"
 	"net/url"
-
-	"github.com/zvirgilx/searxng-go/kernel/config"
-	httputil "github.com/zvirgilx/searxng-go/kernel/internal/util/http"
+	"time"
 )
 
-var client *http.Client
+// Client is an encapsulation and extension of the http client.
+type Client struct {
+	Client *http.Client
+}
 
-func InitClient(conf config.NetworkConfig) error {
-	client = httputil.NewClient(conf.Timeout)
+type Config struct {
+	Timeout  time.Duration `mapstructure:"timeout"`
+	ProxyUrl string        `mapstructure:"proxy_url"`
+}
 
-	if conf.ProxyUrl != "" {
-		if err := setProxy(conf.ProxyUrl); err != nil {
-			return err
+// DefaultClient return the default http client.
+func DefaultClient() *Client {
+	return NewClient(nil)
+}
+
+// NewClient create a client base on network config.
+// if config is nil, it will return a default client.
+func NewClient(config *Config) *Client {
+	if config == nil {
+		return &Client{http.DefaultClient}
+	}
+
+	transport := http.DefaultTransport
+	if config.ProxyUrl != "" {
+		if parsedU, err := url.Parse(config.ProxyUrl); err == nil {
+			transport = &http.Transport{
+				Proxy:             http.ProxyURL(parsedU),
+				DisableKeepAlives: true,
+			}
 		}
 	}
 
-	return nil
-}
-
-func GetClient() *http.Client {
-	return client
-}
-
-func setProxy(proxy string) error {
-	parsedU, err := url.Parse(proxy)
-	if err != nil {
-		return err
+	if transport != http.DefaultTransport || config.Timeout > 0 {
+		return &Client{&http.Client{Timeout: config.Timeout, Transport: transport}}
 	}
 
-	t, ok := client.Transport.(*http.Transport)
-	if client.Transport != nil && ok {
-		t.Proxy = http.ProxyURL(parsedU)
-		t.DisableKeepAlives = true
-	} else {
-		client.Transport = &http.Transport{
-			Proxy:             http.ProxyURL(parsedU),
-			DisableKeepAlives: true,
-		}
-	}
-	return nil
+	return &Client{http.DefaultClient}
+}
+
+func (c *Client) Get() *Request {
+	return NewRequest(c).Method(http.MethodGet)
 }

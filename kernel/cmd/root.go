@@ -13,7 +13,6 @@ import (
 	"github.com/zvirgilx/searxng-go/kernel/internal/complete"
 	"github.com/zvirgilx/searxng-go/kernel/internal/engines"
 	"github.com/zvirgilx/searxng-go/kernel/internal/engines/traits"
-	"github.com/zvirgilx/searxng-go/kernel/internal/network"
 	"github.com/zvirgilx/searxng-go/kernel/internal/result"
 )
 
@@ -47,21 +46,15 @@ func initConfig() {
 		panic(err)
 	}
 
-	complete.InitCompleters()
+	complete.InitCompleters(config.Conf.Complete)
 
 	if err := traits.InitTraits(); err != nil {
 		panic(err)
 	}
 
-	if err := network.InitClient(config.Conf.Network); err != nil {
-		panic(err)
-	}
+	result.InitConfig(config.Conf.Result)
 
-	result.InitScorer()
-
-	if err := engines.InitEngines(); err != nil {
-		panic(err)
-	}
+	engines.InitConfiguration(config.Conf.Engines)
 }
 
 func initLog() {

@@ -2,14 +2,16 @@ package complete
 
 import (
 	"context"
-
-	"github.com/zvirgilx/searxng-go/kernel/config"
 )
 
 const (
 	TypeText  = "text"
 	TypeMedia = "media"
 )
+
+type Config struct {
+	EnableEngines []string `mapstructure:"enable_engines"`
+}
 
 // Completer defines an engine that completes a search query.
 type Completer interface {
@@ -23,9 +25,9 @@ func RegisterCompleter(name string, completer Completer) {
 	completers[name] = completer
 }
 
-func InitCompleters() {
+func InitCompleters(conf Config) {
 	enable := make(map[string]Completer)
-	for _, name := range config.Conf.Complete.EnableEngines {
+	for _, name := range conf.EnableEngines {
 		if f, ok := completers[name]; ok {
 			enable[name] = f
 		}

@@ -21,16 +21,23 @@ type Engine interface {
 	Response(context.Context, *Options, []byte) (*result.Result, error)
 
 	GetName() string
+
+	ApplyConfig(config Config) error
 }
 
 var _engines = map[string]map[string]Engine{}
 
-// RegisterEngine registers a search engine for used.
-func RegisterEngine(name string, engine Engine, category string) {
-	if _engines[category] == nil {
-		_engines[category] = map[string]Engine{}
+// RegisterGlobalEngine registers a search engine for used.
+func RegisterGlobalEngine(engine Engine, category string) {
+	RegisterTo(_engines, engine, category)
+}
+
+func RegisterTo(engines map[string]map[string]Engine, engine Engine, category string) map[string]map[string]Engine {
+	if engines[category] == nil {
+		engines[category] = map[string]Engine{}
 	}
-	_engines[category][name] = engine
+	engines[category][engine.GetName()] = engine
+	return engines
 }
 
 // GetEnginesByCategory gets an enable engines about a certain category.
@@ -41,11 +48,6 @@ func GetEnginesByCategory(category string) map[string]Engine {
 	return nil
 }
 
-// DisableEngine disables an engine.
-func DisableEngine(category string, name string) {
-	ces := _engines[category]
-	if ces == nil {
-		return
-	}
-	delete(ces, name)
+func SetGlobalEngines(engines map[string]map[string]Engine) {
+	_engines = engines
 }

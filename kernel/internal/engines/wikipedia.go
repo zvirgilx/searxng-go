@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/url"
 
+	"github.com/zvirgilx/searxng-go/kernel/internal/network"
+
 	"github.com/stretchr/objx"
 	"github.com/zvirgilx/searxng-go/kernel/internal/engine"
 	"github.com/zvirgilx/searxng-go/kernel/internal/engines/traits"
@@ -14,10 +16,12 @@ import (
 
 const EngineNameWikipedia = "wikipedia"
 
-type wikipedia struct{}
+type wikipedia struct {
+	client *network.Client
+}
 
 func init() {
-	engine.RegisterEngine(EngineNameWikipedia, &wikipedia{}, engine.CategoryGeneral)
+	engine.RegisterGlobalEngine(&wikipedia{client: network.DefaultClient()}, engine.CategoryGeneral)
 }
 
 func (w *wikipedia) Request(ctx context.Context, opts *engine.Options) error {
@@ -28,7 +32,13 @@ func (w *wikipedia) Request(ctx context.Context, opts *engine.Options) error {
 
 	_, wikiNetLoc := getWikiInfo(opts.Locale)
 	title := url.QueryEscape(opts.Query)
-	opts.Url = fmt.Sprintf("https://%s/api/rest_v1/page/summary/%s", wikiNetLoc, title)
+
+	base, err := url.ParseRequestURI(wikiNetLoc)
+	if err != nil {
+		return err
+	}
+
+	opts.Request = w.client.Get().Base(base).Path(fmt.Sprintf("api/rest_v1/page/summary/%s", title))
 
 	return nil
 }
@@ -46,8 +56,10 @@ func (w *wikipedia) Response(ctx context.Context, opts *engine.Options, resp []b
 		return nil, nil
 	}
 
-	wikipediaLink := m.Get("content_urls").ObjxMap().Get("desktop").
-		ObjxMap().Get("page").Str()
+	wikipediaLink := m.Get("content_urls").ObjxMap().
+		Get("desktop").ObjxMap().
+		Get("page").
+		Str()
 	if wikipediaLink == "" {
 		return nil, nil
 	}
@@ -91,4 +103,9 @@ func getWikiInfo(locale string) (string, string) {
 
 func (w *wikipedia) GetName() string {
 	return EngineNameWikipedia
+}
+
+func (i *wikipedia) ApplyConfig(conf engine.Config) error {
+	i.client = network.NewClient(conf.Client)
+	return nil
 }

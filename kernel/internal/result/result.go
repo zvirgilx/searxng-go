@@ -3,38 +3,22 @@ package result
 import (
 	"sort"
 
-	"github.com/zvirgilx/searxng-go/kernel/config"
 	"github.com/zvirgilx/searxng-go/kernel/internal/util"
 )
 
+type Config struct {
+	Score  Score                     `mapstructure:"score"`
+	Limits map[string]map[string]int `mapstructure:"limits"`
+}
+
 // Result of search
 type Result struct {
-	MergedData  []Data    `json:"merged_data"` // MergedData store result from different search engines.
+	MergedData  []*Data   `json:"merged_data"` // MergedData store result from different search engines.
 	Suggestions *util.Set `json:"suggestions"` // Suggestions store suggestion from different search engines.
 	InfoBox     *InfoBox  `json:"infoBox"`     // InfoBox store information from wikipedia of query
 
 	From   string `json:"-"` // From means the engine name of the search results.
 	PageNo int    `json:"-"` // PageNo means the page number of result. PageNo = 1 means first page.
-}
-
-// Data of search result
-type Data struct {
-	Engine    string `json:"engine"`    // Engine is search engine name, means result source.
-	Title     string `json:"title"`     // Title is the search result title.
-	Url       string `json:"url"`       // Url link to the third party website.
-	Content   string `json:"content"`   // Content is a short description.
-	ImgSrc    string `json:"img_src"`   // ImgSrc is an image Url, used for poster.
-	Thumbnail string `json:"thumbnail"` // Thumbnail Url for some video result.
-
-	// Query is the query of search.
-	Query string `json:"-"`
-
-	// Metadata stores data about fields and values in data.
-	// This field is not shown externally and is only used internally.
-	Metadata map[string]string `json:"-"`
-
-	// Score are scored by enabled scorer on the data.
-	Score int `json:"-"`
 }
 
 // InfoBox of search query from wikipedia(temporary)
@@ -44,6 +28,14 @@ type InfoBox struct {
 	ImgSrc  string              `json:"img_src"`
 	Url     string              `json:"url"`
 	UrlList []map[string]string `json:"url_list"`
+}
+
+var conf Config
+
+func InitConfig(c Config) {
+	conf = c
+
+	loadRule()
 }
 
 func CreateResult(from string, page int) *Result {
@@ -64,7 +56,7 @@ func (r *Result) Merge(result *Result) {
 	}
 
 	limit := len(result.MergedData)
-	if maxSize, ok := config.Conf.Result.Limits[page]; ok {
+	if maxSize, ok := conf.Limits[page]; ok {
 		if m, have := maxSize[result.From]; have && m < limit {
 			limit = m
 		}
@@ -84,10 +76,8 @@ func (r *Result) isFirstPage() bool {
 	return r.PageNo == 1
 }
 
-func (r *Result) AppendData(data Data) {
-	data.Metadata = buildMetadata(data)
-	data.Score = getScore(data)
-	r.MergedData = append(r.MergedData, data)
+func (r *Result) AppendData(d *Data) {
+	r.MergedData = append(r.MergedData, d.unstructured().doScore())
 }
 
 func (r *Result) GetDataSize() int {
@@ -97,31 +87,13 @@ func (r *Result) GetDataSize() int {
 	return len(r.MergedData)
 }
 
-func (r *Result) GetSortedData() []Data {
+func (r *Result) GetSortedData() []*Data {
 	r.sortData()
 	return r.MergedData
 }
 
 func (r *Result) sortData() {
 	sort.Slice(r.MergedData, func(i, j int) bool {
-		return r.MergedData[i].Score > r.MergedData[j].Score
+		return r.MergedData[i].score > r.MergedData[j].score
 	})
-}
-
-func buildMetadata(data Data) map[string]string {
-	metadata := make(map[string]string)
-	for _, field := range config.Conf.Result.Score.MetadataFields {
-		switch field {
-		case "engine":
-			metadata[field] = data.Engine
-		case "title":
-			metadata[field] = data.Title
-		case "content":
-			metadata[field] = data.Content
-		case "$QUERY":
-			metadata[field] = data.Query
-
-		}
-	}
-	return metadata
 }

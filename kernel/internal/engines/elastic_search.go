@@ -3,57 +3,40 @@ package engines
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
+	"net/url"
+
+	"github.com/mitchellh/mapstructure"
+	"github.com/zvirgilx/searxng-go/kernel/internal/network"
 
 	"github.com/stretchr/objx"
-	"github.com/zvirgilx/searxng-go/kernel/config"
 	"github.com/zvirgilx/searxng-go/kernel/internal/engine"
 	"github.com/zvirgilx/searxng-go/kernel/internal/result"
-	httputil "github.com/zvirgilx/searxng-go/kernel/internal/util/http"
 )
 
 const (
 	EngineNameElasticSearch = "elastic_search"
 )
 
-type elasticSearch struct{}
+type elasticSearch struct {
+	client *network.Client
 
-var (
-	baseUrl     = "127.0.0.1:9200"
-	index       = ""
-	searchUrl   = ""
-	queryType   = "match"
-	queryFields = []string{"title"}
-)
-
-func init() {
-	engine.RegisterEngine(EngineNameElasticSearch, &elasticSearch{}, engine.CategoryGeneral)
+	baseUrl     string
+	index       string
+	queryType   string
+	queryFields []string
 }
 
-// InitElasticSearch init elastic search engine.
-func InitElasticSearch() {
-	conf := config.Conf.Search.Engines.ElasticSearch
-	if !conf.Enable {
-		engine.DisableEngine(engine.CategoryGeneral, EngineNameElasticSearch)
-		return
-	}
-	if u := conf.BaseUrl; u != "" {
-		baseUrl = u
-	}
-	if i := conf.Index; i != "" {
-		index = i
-	}
+type ElasticSearchConfig struct {
+	Enable      bool     `mapstructure:"enable"`       //
+	BaseUrl     string   `mapstructure:"base_url"`     // BaseUrl is elastic search access url.
+	Index       string   `mapstructure:"index"`        // Index used by search.
+	QueryType   string   `mapstructure:"query_type"`   // The type of query, such as match,term, etc.
+	QueryFields []string `mapstructure:"query_fields"` // The fields of the query, such as title, content, etc.
+}
 
-	searchUrl = baseUrl + "/" + index + "/_search"
-
-	if t := conf.QueryType; t != "" {
-		queryType = t
-	}
-	if fields := conf.QueryFields; len(fields) != 0 {
-		queryFields = fields
-	}
-
+func init() {
+	engine.RegisterGlobalEngine(&elasticSearch{client: network.DefaultClient()}, engine.CategoryGeneral)
 }
 
 func (e *elasticSearch) Request(ctx context.Context, opts *engine.Options) error {
@@ -61,21 +44,16 @@ func (e *elasticSearch) Request(ctx context.Context, opts *engine.Options) error
 		return nil
 	}
 
-	opts.Url = searchUrl
-
-	// It can choose different query types.
-	// This determines the accuracy of the query results.
-	f := availableQueryFunc[queryType]
-	if f == nil {
-		return fmt.Errorf("elastic search query type not found, type:%s", queryType)
+	base, err := url.Parse(e.baseUrl)
+	if err != nil {
+		return err
 	}
 
-	// The request body is the query condition of es.
-	opts.Body = f(opts.Query, queryFields...)
+	r := e.client.Get().Base(base).Path(e.index+"/_search").
+		Body(getQueryFn(e.queryType)(opts.Query, e.queryFields...)).
+		Header("Content-Type", "application/json")
 
-	httpOpts := httputil.WithHeaders(map[string]string{"Content-Type": "application/json"})
-	opts.SetHTTPOptions(httpOpts)
-
+	opts.Request = r
 	return nil
 }
 
@@ -103,7 +81,7 @@ func (e *elasticSearch) Response(ctx context.Context, opts *engine.Options, resp
 		imgSrc := r.Get("poster").Str()
 		url := r.Get("url").Str()
 
-		res.AppendData(result.Data{
+		res.AppendData(&result.Data{
 			Engine:  EngineNameElasticSearch,
 			Title:   title,
 			Url:     url,
@@ -118,16 +96,47 @@ func (e *elasticSearch) Response(ctx context.Context, opts *engine.Options, resp
 	return res, nil
 }
 
-type queryFunc func(value string, keys ...string) string
+func (e *elasticSearch) GetName() string {
+	return EngineNameElasticSearch
+}
+
+func (e *elasticSearch) ApplyConfig(conf engine.Config) error {
+	e.client = network.NewClient(conf.Client)
+
+	var esConf *ElasticSearchConfig
+	if err := mapstructure.Decode(conf.Extra, &esConf); err != nil {
+		return err
+	}
+
+	e.baseUrl = esConf.BaseUrl
+	e.index = esConf.Index
+	e.queryType = esConf.QueryType
+	e.queryFields = esConf.QueryFields
+	return nil
+
+}
+
+type queryFunc func(value string, keys ...string) []byte
 
 var availableQueryFunc = map[string]queryFunc{
 	"match":       matchQuery,
 	"multi_match": multiMatchQuery,
 }
 
-func matchQuery(value string, keys ...string) string {
+// matchQuery format match query.
+//
+//	{
+//	   "query": {
+//	       "match": {
+//	           "title": {
+//	               "query": "spider"
+//	           }
+//	       }
+//	   }
+//	}
+func matchQuery(value string, keys ...string) []byte {
 	if len(keys) == 0 {
-		return ""
+		return nil
 	}
 	q := map[string]interface{}{
 		"query": map[string]interface{}{
@@ -140,10 +149,23 @@ func matchQuery(value string, keys ...string) string {
 	}
 
 	d, _ := json.Marshal(q)
-	return string(d)
+	return d
 }
 
-func multiMatchQuery(value string, keys ...string) string {
+// multiMatchQuery format multi match query.
+//
+//	{
+//	   "query": {
+//	       "multi_match": {
+//	           "fields": [
+//	               "title",
+//	               "description"
+//	           ],
+//	           "query": "searxng-go"
+//	       }
+//	   }
+//	}
+func multiMatchQuery(value string, keys ...string) []byte {
 	q := map[string]interface{}{
 		"query": map[string]interface{}{
 			"multi_match": map[string]interface{}{
@@ -153,9 +175,16 @@ func multiMatchQuery(value string, keys ...string) string {
 		},
 	}
 	d, _ := json.Marshal(q)
-	return string(d)
+	return d
 }
 
-func (e *elasticSearch) GetName() string {
-	return EngineNameElasticSearch
+// It can choose different query types.
+// This determines the accuracy of the query results.
+func getQueryFn(queryType string) queryFunc {
+	f := availableQueryFunc[queryType]
+	if f == nil {
+		slog.Warn("unknown elasticsearch query function type", slog.String("type", queryType))
+		return availableQueryFunc["match"]
+	}
+	return f
 }

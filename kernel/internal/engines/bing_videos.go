@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/zvirgilx/searxng-go/kernel/internal/network"
+
 	"github.com/PuerkitoBio/goquery"
 	"github.com/zvirgilx/searxng-go/kernel/internal/engine"
 	"github.com/zvirgilx/searxng-go/kernel/internal/result"
@@ -18,7 +20,6 @@ import (
 
 const (
 	EngineNameBingVideos = "bing_videos"
-	bingVideosBaseUrl    = "https://www.bing.com/videos/asyncv2"
 )
 
 var (
@@ -30,33 +31,29 @@ var (
 	}
 )
 
-type bingVideo struct{}
+type bingVideo struct {
+	client *network.Client
+}
 
 func init() {
-	engine.RegisterEngine(EngineNameBingVideos, &bingVideo{}, engine.CategoryGeneral)
-	engine.RegisterEngine(EngineNameBingVideos, &bingVideo{}, engine.CategoryVideo)
+	engine.RegisterGlobalEngine(&bingVideo{client: network.DefaultClient()}, engine.CategoryGeneral)
 }
 
 func (e *bingVideo) Request(ctx context.Context, opts *engine.Options) error {
-	log := slog.With("func", "bing_videos.Request")
-
 	// example: https://www.bing.com/videos/asyncv2?q=test&async=content&first=1&count=35
-	queryParams := url.Values{}
-	queryParams.Set("q", opts.Query)
-	queryParams.Set("async", "content")
-	queryParams.Set("first", strconv.Itoa((opts.PageNo-1)*10))
-	queryParams.Set("count", "10")
+	base, _ := url.Parse("https://www.bing.com")
+	req := e.client.Get().Base(base).Path("videos/asyncv2").
+		Param("q", opts.Query).
+		Param("async", "content").
+		Param("first", strconv.Itoa((opts.PageNo-1)*10)).
+		Param("count", "10")
 
 	// example: one day (60 * 24 minutes) '&qft= filterui:videoage-lt1440&form=VRFLTR'
-
-	timeRange := opts.TimeRange
-	if timeRange != "" {
-		queryParams.Set("form", "VRFLTR")
-		queryParams.Set("qft", fmt.Sprintf(" filterui:videoage-lt%v", bingTimeMap[timeRange]))
+	if opts.TimeRange != "" {
+		req.Param("form", "VRFLTR").Param("qft", fmt.Sprintf(" filterui:videoage-lt%v", bingTimeMap[opts.TimeRange]))
 	}
 
-	opts.Url = bingVideosBaseUrl + "?" + queryParams.Encode()
-	log.DebugContext(ctx, "request", "url", opts.Url)
+	opts.Request = req
 	return nil
 }
 
@@ -108,7 +105,7 @@ func (e *bingVideo) Response(ctx context.Context, opts *engine.Options, resp []b
 		content := fmt.Sprintf("%s - %s", metadata["du"], info)
 		thumbnail, _ := s.Find("div.mc_vtvc_th img").Attr("src")
 
-		res.AppendData(result.Data{
+		res.AppendData(&result.Data{
 			Engine:    EngineNameBingVideos,
 			Title:     metadata["vt"].(string),
 			Url:       metadata["murl"].(string),
@@ -123,4 +120,9 @@ func (e *bingVideo) Response(ctx context.Context, opts *engine.Options, resp []b
 
 func (e *bingVideo) GetName() string {
 	return EngineNameBingVideos
+}
+
+func (e *bingVideo) ApplyConfig(conf engine.Config) error {
+	e.client = network.NewClient(conf.Client)
+	return nil
 }
