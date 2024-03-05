@@ -25,14 +25,17 @@ type elasticSearch struct {
 	index       string
 	queryType   string
 	queryFields []string
+
+	maxLengthOfContent int
 }
 
 type ElasticSearchConfig struct {
-	Enable      bool     `mapstructure:"enable"`       //
-	BaseUrl     string   `mapstructure:"base_url"`     // BaseUrl is elastic search access url.
-	Index       string   `mapstructure:"index"`        // Index used by search.
-	QueryType   string   `mapstructure:"query_type"`   // The type of query, such as match,term, etc.
-	QueryFields []string `mapstructure:"query_fields"` // The fields of the query, such as title, content, etc.
+	Enable             bool     `mapstructure:"enable"`
+	BaseUrl            string   `mapstructure:"base_url"`              // BaseUrl is elastic search access url.
+	Index              string   `mapstructure:"index"`                 // Index used by search.
+	QueryType          string   `mapstructure:"query_type"`            // The type of query, such as match,term, etc.
+	QueryFields        []string `mapstructure:"query_fields"`          // The fields of the query, such as title, content, etc.
+	MaxLengthOfContent int      `mapstructure:"max_length_of_content"` // The maximum length of the content.
 }
 
 func init() {
@@ -78,6 +81,9 @@ func (e *elasticSearch) Response(ctx context.Context, opts *engine.Options, resp
 
 		title := r.Get("title").Str()
 		content := r.Get("description").Str()
+		if len(content) > e.maxLengthOfContent {
+			content = content[:e.maxLengthOfContent]
+		}
 		imgSrc := r.Get("poster").Str()
 		url := r.Get("url").Str()
 
@@ -112,6 +118,11 @@ func (e *elasticSearch) ApplyConfig(conf engine.Config) error {
 	e.index = esConf.Index
 	e.queryType = esConf.QueryType
 	e.queryFields = esConf.QueryFields
+
+	e.maxLengthOfContent = esConf.MaxLengthOfContent
+	if e.maxLengthOfContent == 0 {
+		e.maxLengthOfContent = 500
+	}
 	return nil
 
 }
